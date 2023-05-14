@@ -409,3 +409,120 @@ def save_satellite_image(save_as, overwrite, *args):
         # Save image
         with open(save_as, 'wb') as f:
             f.write(image)
+
+def m_per_px(zoom_level, location_lat):
+    '''
+    Calculate image resolution in meters per pixel.
+
+    Parameters
+    ----------
+    zoom_level : int
+        Image zoom level between 0 and 21 (based on Mercator projection).
+    location_lat : float
+        Latitude of image location.
+
+    Returns
+    -------
+    resolution : float
+        Calculated image resolution in meters per pixel.
+    '''
+    # Set geographic constant as defined by WGS84
+    a = 6378137 # equatorial radius
+
+    # Calculate equatorial circumference
+    C = 2 * math.pi * a
+
+    # Convert latitude to radian
+    lat_radian = math.pi / 180 * location_lat
+
+    # Calculate image resolution
+    resolution = C / 256 * math.cos(lat_radian) / 2**zoom_level
+
+    # Return image resolution
+    return resolution
+
+
+def get_image_size(width_px, height_px, zoom_level, location_lat):
+    '''
+    Calculate image size in meters.
+    
+    Parameters
+    ----------
+    width_px : int
+        Image width in pixels.
+    height_px : int
+        Image height in pixels.
+    zoom_level : int
+        Image zoom level between 0 and 21 (based on Mercator projection).
+    location_lat : float
+        Latitude of image location.
+    
+    Returns
+    -------
+    width_m, height_m : float
+        Image dimensions in meters.
+    '''
+    # Calculate image width in meters
+    width_m = width_px * m_per_px(zoom_level, location_lat)
+
+    # Calculate image height in meters
+    height_m = height_px * m_per_px(zoom_level, location_lat)
+
+    # Return image dimensions in meters
+    return width_m, height_m
+
+
+def get_image_boundaries(location_lat, location_long, width_px, height_px, zoom_level):
+    '''
+    Calculate image geographic image boundaries based on location and dimensions.
+    
+    Parameters
+    ----------
+    location_lat : float
+        Latitude of image location.
+    location_long : float
+        Longitude of image location
+    width_px : int
+        Image width in pixels.
+    height_px : int
+        Image height in pixels.
+    zoom_level : int
+        Image zoom level between 0 and 21 (based on Mercator projection).
+    
+    Returns
+    -------
+    lat_top, lat_bottom, long_left, long_right : float
+        Image boundaries as coordinates.
+    '''
+    # Set geographic constants as defined by WGS84
+    a = 6378137 # equatorial radius
+    e = 0.00669437999014**(1 / 2) # eccentricity
+
+    # Convert latitude to radian
+    lat_radian = math.pi / 180 * location_lat
+
+    # Calculate number of meters per degree of latitude
+    m_per_lat = abs(math.pi * a * (1 - e**2) / (180 * (1 - e**2 * math.sin(lat_radian)**2)**(3 / 2)))
+
+    # Calculate degrees of latitude per meter
+    lat_per_m = 1 / m_per_lat
+
+    # Calculate number of meters per degree of longitude
+    m_per_long = abs(math.pi * a * math.cos(lat_radian) / (180 * (1 - e**2 * math.sin(lat_radian)**2)**(1 / 2)))
+
+    # Calculate degrees of longitude per meter
+    long_per_m = 1 / m_per_long
+
+    # Calculate image size in meters
+    width_m, height_m = get_image_size(width_px, height_px, zoom_level, location_lat)
+
+    # Calculate latitude boundaries
+    lat_top = location_lat + height_m / 2 * lat_per_m
+    lat_bottom = location_lat - height_m / 2 * lat_per_m
+
+    # Calculate longitude boundaries
+    long_left = location_long - width_m  / 2 * long_per_m
+    long_right = location_long + width_m  / 2 * long_per_m
+
+    # Return image boundaries as coordinates
+    return lat_top, lat_bottom, long_left, long_right
