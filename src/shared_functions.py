@@ -402,7 +402,7 @@ def save_satellite_image(save_as, overwrite, *args):
         Saves image at the specified location.
     '''
     # Do not send requests for already existing files
-    if overwrite == True and Path(save_as).is_file():
+    if overwrite == False and Path(save_as).is_file():
         pass
     else:
         # Request image from Google Maps Static API
