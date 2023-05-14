@@ -3,6 +3,7 @@
 ##################################################
 # Folder attributes on macOS
 .DS_Store
+data/raw/satellite-images*/
 
 ##################################################
 # Python.gitignore from https://github.com/github/gitignore
