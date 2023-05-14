@@ -63,43 +63,46 @@ def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state
     return dict_list
 
 
-def get_predictions(model, X_tensors, y_split, dataset_labels=['train', 'val', 'test'], save_as=False):
+def get_predictions(model, X_tensors, y_split, subset_keys=['train', 'val', 'test'], save_as=False):
     '''
     Generate predictions with machine learning model.
     
     Parameters
     ----------
-    model : ?
+    model : model
         Model to generate predictions with.
-    y_true : array
-        True output.
-    verbose : bool, default True
-        Whether to print metrics to the console.
-    save : 
+    X_tensors : dict of tensors
+        Dictionary of input tensors with subset keys.
+    y_split : dict of arrays
+        Dictionary of output arrays with subset keys.
+    subset_keys : list, default ['train', 'val', 'test']
+        List of subset keys.
+    save_as : bool, default Fals
+        Whether to save predictions in csv format at the specified location.
     
     Returns
     -------
     predictions : DataFrame
-        Generated predictions.
+        Generated model predictions sorted by index.
     '''
-    predictions = pd.DataFrame({
-        'y_true': pd.concat([y_split[key] for key in dataset_labels]),
-        'y_pred': np.nan,
-        'dataset': np.nan
-        })
+    predictions = pd.DataFrame({'y_true': pd.concat([y_split[subset_key] for subset_key in subset_keys])})
     
-    y_pred = [model(X_tensors[key]) for key in dataset_labels]
-    predictions.y_pred = [pred.item() for dataset in y_pred for pred in dataset]
+    # Add model predictions
+    y_pred = [model(X_tensors[subset_key]) for subset_key in subset_keys]
+    predictions['y_pred'] = [pred.item() for subset in y_pred for pred in subset]
+    
+    # Add subset keys
+    subsets = [[subset_key] * len(y_split[subset_key]) for subset_key in subset_keys]
+    predictions['subset'] = [key for subset in subsets for key in subset]
 
-    labels = [[key] * len(y_split[key]) for key in dataset_labels]
-    predictions.dataset = [label for x in labels for label in x]
-
+    # Sort predictions by index
     predictions.sort_index(inplace=True)
 
     # Save predictions
     if save_as != True:
         predictions.to_csv(save_as)
     
+    # Return predictions
     return predictions
 
 
