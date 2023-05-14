@@ -327,3 +327,85 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
 
     # Return preformance metrics
     return perf_metrics
+
+
+def get_satellite_image(location_lat, location_long, zoom_level, size, maptype, key, secret=None):
+    '''
+    Request satellite image from Google Maps Static API.
+    
+    Parameters
+    ----------
+    location_lat : float
+        Latitude of image location.
+    location_long : float
+        Longitude of image location
+    zoom_level : int
+        Image zoom level between 0 and 21 (based on Mercator projection).
+    size : str
+        Image resolution in pixels, e.g. '640x640'.
+    maptype : str
+        Image map type, e.g. 'satellite'.
+    key : str, default None
+        Google Maps Static API key.
+    secret : str
+        Google Maps Static API secret.
+    
+    Returns
+    -------
+    image : bytes
+        Image in byte format.
+    '''
+    # Set url for Google Maps Static API
+    url = 'https://maps.googleapis.com/maps/api/staticmap'
+
+    # Set request params
+    params = {
+        'center': f'{location_lat},{location_long}',
+        'zoom': zoom_level,
+        'size': size,
+        'maptype': maptype,
+        'key': key
+        }
+
+    # Sign URL
+    if secret != None:
+        url = sign_url(requests.Request('GET', url, params=params).prepare().url, secret=secret)
+    
+    # Request image from Google Maps Static API
+    image = requests.get(url).content
+
+    # Return image
+    return image
+
+# Define function for getting satellite image
+def save_satellite_image(save_as, overwrite, *args):
+    '''
+    Save satellite image from Google Maps Static API.
+    
+    Parameters
+    ----------
+    save_as : str
+        Location where to save image.
+    overwrite : bool
+        Whether to overwrite existing image.
+    *args : float
+        Arguments passed on to get_satellite_image().
+    
+    Returns
+    -------
+    None
+        Saves image at the specified location.
+    '''
+    # Do not send requests for already existing files
+    if overwrite == True and Path(save_as).is_file():
+        pass
+    else:
+        # Request image from Google Maps Static API
+        image = get_satellite_image(*args)
+
+        # Create folder if it does not exist already
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+
+        # Save image
+        with open(save_as, 'wb') as f:
+            f.write(image)
