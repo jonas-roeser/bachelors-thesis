@@ -3,64 +3,156 @@ import pandas as pd
 from sklearn import metrics as sklearn_metrics
 from sklearn.utils import shuffle as shuffle_arrays
 
-def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state=42, verbose=True):
+def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state=42, return_keys=True, save_subset_sizes_as=False, verbose=True):
     '''
-    Split arrays into training, validation and testing arrays.
+    Split arrays into training, validation and testing subsets.
     
+    Parameters
     ---------
     *arrays : array or dataframe
         Arbitrary number of arrays to split.
     val_size : int or float
-        Size of validation data in absolute or relative terms.
+        Size of validation subset in absolute or relative terms.
     test_ size : int or float
-        Size of testing data in absolute or relative terms.
+        Size of testing subset in absolute or relative terms.
     shuffle : bool, default True
         Whether to shuffle the dataset before splitting.
     random_state : int, default 42
-        Determines random number generation for shuffling the data. None for non-deterministic results.
+        Determines random number generation for shuffling the data. None results in non-deterministic results.
+    return_keys : bool, default True
+        Whether to return a list of subset keys.
+    save_subset_sizes_as : bool, default False
+        Whether to save subset sizes in csv format at the specified location.
     verbose : bool, default True
-        Whether to print array lengths to the console.
+        Whether to print subset sizes to the console.
     
     Returns
     -------
     dict_list : list of dictionaries
-        Training, validation and testing arrays split using val_size and test_size.
+        List of dictionaries, each containing train, val and test subsets split using val_size and test_size.
+    subset_keys : list
+        List of subset keys.
     '''
+    # Define subset keys
+    subset_keys = ['train', 'val', 'test']
+    
+    # Use length of first array as reference point
     array_len = len(arrays[0])
 
+    # Compare lengths of all arrys to length of first array
     if not all(len(array) == array_len for array in arrays):
         raise ValueError('Arrays must be of equal length!')
     
+    # Shuffle all arrays consistently
     if shuffle == True:
         arrays = shuffle_arrays(*arrays, random_state=random_state)
 
+    # Calculate absolute size of validation set if not already given
     if type(val_size) is float:
         val_size = int(array_len * val_size)
     
+    # Calculate absolute size of testing set if not already given
     if type(test_size) is float:
         test_size = int(array_len * test_size)
     
+    # Calculate absolute size of training set based on size of validation and testing set
     train_size = array_len - (val_size + test_size)
 
-    if verbose == True:
-        print(f'{"Array":<10}{"Length (n)":>12}{"Length (%)":>12}')
-        print(f'{34 * "-"}')
-        print(f'{"training":<10}{train_size:>12}{(train_size / array_len):12.2%}')
-        print(f'{"validation":<10}{val_size:>12}{(val_size / array_len):12.2%}')
-        print(f'{"testing":<10}{test_size:>12}{(test_size / array_len):12.2%}')
-        print(f'{34 * "-"}')
-        print(f'{"total":<10}{array_len:>12}{(array_len / array_len):12.2%}')
+    # Create dataframe for storing subset sizes
+    if verbose == True or save_subset_sizes_as != None:
+        subset_sizes = pd.DataFrame(columns=['Size (n)', 'Size (%)'], index=pd.Index(subset_keys, name='Subset'))
 
+        # Store size of each subset
+        subset_sizes.loc['train'] = [train_size, train_size / array_len]
+        subset_sizes.loc['val'] = [val_size, val_size / array_len]
+        subset_sizes.loc['test'] = [test_size, test_size / array_len]
+
+        # Store total size
+        subset_sizes.loc['total'] = [array_len, array_len / array_len]
+
+    if verbose == True:
+        # Include index in column width computation
+        auxiliary_df = subset_sizes.reset_index()
+
+        # Convert values into strings
+        auxiliary_df = auxiliary_df.astype(str)
+
+        # Use only characters before decimal point for column width computation
+        auxiliary_df.replace(r'\..+','', regex=True, inplace=True)
+
+        # Define number of digits after decimal point
+        n_decimals = 2
+
+        # Replace strings of decimal values with their length + 1 for decimal point + n_decimals after decimal point
+        auxiliary_df.iloc[:, [2]] = auxiliary_df.iloc[:, [2]].applymap(lambda x: len(x) + 1 + n_decimals)
+
+        # Replace strings of non-decimal values with their length
+        auxiliary_df.iloc[:, :2] = auxiliary_df.iloc[:, :2].applymap(len)
+
+        # Include column name lengths in width computation
+        auxiliary_df.loc['colname_lengths'] = [len(colname) for colname in auxiliary_df.columns]
+
+        # Compute minimum width for each column
+        min_col_widths = auxiliary_df.max().to_list()
+
+        # Define inter-column spacing
+        spacing = 2
+
+        # Add inter-column spacing to all columns but the first
+        col_widths = [min_col_widths[0]] + [min_col_width + spacing for min_col_width in min_col_widths[1:]]
+
+        # Define header formatting
+        def format_header(i, header):
+            if i == 0:
+                return f'{header : <{col_widths[i]}}'
+            else:
+                return f'{header : >{col_widths[i]}}'
+        
+        # Define entry formatting
+        def format_entry(i, entry):
+            if i == 0:
+                return f'{entry : <{col_widths[i]}}'
+            elif i == 2:
+                return f'{entry:{col_widths[i]}.{n_decimals}%}'
+            else:
+                return f'{entry:{col_widths[i]}.0f}'
+
+        # Print column headers
+        print(''.join([format_header(i, header) for i, header in enumerate(subset_sizes.reset_index())]))
+
+        # Print row seperator
+        print('-' * sum(col_widths))
+
+        # Print all rows except last
+        for index, row in subset_sizes.reset_index().iloc[:-1].iterrows():
+            print(''.join([format_entry(i, entry) for i, entry in enumerate(row)]))
+
+        # Print row separator
+        print('-' * sum(col_widths))
+
+        # Print last row
+        print(''.join([format_entry(i, entry) for i, entry in enumerate(subset_sizes.reset_index().iloc[-1])]))
+
+    # Save subset sizes
+    if save_subset_sizes_as != None:
+        subset_sizes.to_csv(save_subset_sizes_as)
+
+    # Create list of subset dictionaries
     dict_list = []
 
+    # For each array create a dictionary containing a train, val and test subset
     for array in arrays:
         dict_list.append({
             'train': array[:train_size],
             'val': array[train_size:-test_size],
             'test': array[-test_size:]
             })
-
-    return dict_list
+    
+    # Return list of dictionaries and subset keys
+    if return_keys == True:
+        return *dict_list, subset_keys
+    else:
+        return dict_list
 
 
 def get_predictions(model, X_tensors, y_split, subset_keys=['train', 'val', 'test'], save_as=False):
