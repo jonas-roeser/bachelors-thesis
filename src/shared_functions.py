@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn import metrics
+from sklearn import metrics as sklearn_metrics
 from sklearn.utils import shuffle as shuffle_arrays
 
 def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state=42, verbose=True):
@@ -103,15 +103,18 @@ def get_predictions(model, X_tensors, y_split, dataset_labels=['train', 'val', '
     return predictions
 
 
-def calc_metrics(predictions, dataset_labels=['train', 'val', 'test'], save_as=False, verbose=True):
-    # adapt this function to calculate metrics for all three (train, val, test) and save using model name
+def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False, verbose=True):
     '''
     Calculate performance metrics for machine learning model.
     
     Parameters
     ----------
     predictions : DataFrame
-        Contains index, y_true, y_pred and dataset (one of 'train', 'val' or 'test).
+        Contains index, y_true, y_pred and subset.
+    subset_keys : list, default ['train', 'val', 'test']
+        List of subset keys.
+    save_as : bool, default False
+        Whether to save performance metrics in csv format at the specified location.
     verbose : bool, default True
         Whether to print metrics to the console.
     
@@ -120,35 +123,112 @@ def calc_metrics(predictions, dataset_labels=['train', 'val', 'test'], save_as=F
     perf_metrics : DataFrame
         Calculated performance metrics.
     '''
-    perf_metrics = pd.DataFrame({
-        'CPE': np.nan,
-        'RMSE': np.nan,
-        'MAE': np.nan,
-        'R2': np.nan
-        }, index=pd.Index(dataset_labels, name='Dataset'))
+    # Create DataFrame for storing performance metrics
+    perf_metrics = pd.DataFrame(index=pd.Index(subset_keys, name='Subset'))
     
-    for dataset in perf_metrics.index:
-        y_true = predictions[predictions.dataset == dataset].y_true
-        y_pred = predictions[predictions.dataset == dataset].y_pred
+    # Define functions for calculating performance metrics
+    def cpe(y_true, y_pred):
+        return sum(abs(y_true - y_pred)) / sum(y_true)
+    
+    def rmse(y_true, y_pred):
+        return sklearn_metrics.mean_squared_error(y_true, y_pred, squared=False)
+        # (sum((y_true - y_pred) ** 2) / len(y_true)) ** 0.5
 
-        perf_metrics.loc[dataset, 'CPE'] = sum(abs(y_true - y_pred)) / sum(y_true)
-        perf_metrics.loc[dataset, 'RMSE'] = metrics.mean_squared_error(y_true, y_pred, squared=False)# (sum((y_true - y_pred) ** 2) / len(y_true)) ** 0.5
-        perf_metrics.loc[dataset, 'MAE'] = metrics.mean_absolute_error(y_true, y_pred)# sum(abs(y_true - y_pred)) / len(y_true)
-        perf_metrics.loc[dataset, 'R2'] = r2 = metrics.r2_score(y_true, y_pred)# 1 - (sum((y_true - y_pred) ** 2) / sum((y_true - np.mean(y_true)) ** 2))
-        # Since actuals are close to 0, MAPE would result in a very high value and is therefore not used
+    def mae(y_true, y_pred):
+        return sklearn_metrics.mean_absolute_error(y_true, y_pred)
+        # sum(abs(y_true - y_pred)) / len(y_true)
+
+    def r2(y_true, y_pred):
+        return sklearn_metrics.r2_score(y_true, y_pred)
+        # 1 - (sum((y_true - y_pred) ** 2) / sum((y_true - np.mean(y_true)) ** 2))
     
+    # Since actuals are close to 0, MAPE would result in a very high value and is therefore not used
+
+    # Create list containing all functions for calculating performance metrics
+    metric_functions = [cpe, rmse, mae, r2]
+
+    # Calculate performance metrics for each subset
+    for subset in perf_metrics.index:
+        # Use y_true & y_pred from specific subset
+        y_true = predictions[predictions.subset == subset].y_true
+        y_pred = predictions[predictions.subset == subset].y_pred
+
+        # Calculate each metric
+        for metric_function in metric_functions:
+            perf_metrics.loc[subset, metric_function.__name__.upper()] = metric_function(y_true, y_pred)
+
+    # Use y_true & y_pred of total dataset
+    y_true = predictions.y_true
+    y_pred = predictions.y_pred
+
+    # Calculate values of each metric for total dataset
+    for metric_function in metric_functions:
+        perf_metrics.loc['total', metric_function.__name__.upper()] = metric_function(y_true, y_pred)
+
     if verbose == True:
-        index_width = max(len(perf_metrics.index.name), perf_metrics.index.str.len().max())
-        value_widths = {metric:max(len(metric), column.astype(str).str.split('.').str[0].str.len().max()) for metric, column in zip(perf_metrics.columns, [perf_metrics[metric] for metric in perf_metrics.columns])}
-        n_decimals = 3
-        spacing = 3
+        # Include index in column width computation
+        auxiliary_df = perf_metrics.reset_index()
 
-        print(f'{perf_metrics.index.name : <{index_width}}' + ''.join([f'{metric : >{value_widths[metric] + spacing + n_decimals}}' for metric in perf_metrics.columns]))
-        print('-' * index_width + '-' * (sum(value_widths.values()) + len(value_widths) * (spacing + n_decimals)))
-        for dataset_label in dataset_labels:
-            print(f'{dataset_label : <{index_width}}' + ''.join([f'{perf_metrics.loc[dataset_label][metric_label]:{value_widths[metric_label] + spacing + n_decimals}.{n_decimals}f}' for metric_label in perf_metrics.columns]))
-    
+        # Convert values into strings
+        auxiliary_df = auxiliary_df.astype(str)
+
+        # Use only characters before decimal point for column width computation
+        auxiliary_df.replace(r'\..+','', regex=True, inplace=True)
+
+        # Define number of digits after decimal point
+        n_decimals = 3
+
+        # Replace strings of decimal values with their length + 1 for decimal point + n_decimals after decimal point
+        auxiliary_df.iloc[:, 1:] = auxiliary_df.iloc[:, 1:].applymap(lambda x: len(x) + 1 + n_decimals)
+
+        # Replace strings of non-decimal values with their length
+        auxiliary_df.iloc[:, [0]] = auxiliary_df.iloc[:, [0]].applymap(len)
+
+        # Include column name lengths in width computation
+        auxiliary_df.loc['colname_lengths'] = [len(colname) for colname in auxiliary_df.columns]
+
+        # Compute minimum width for each column
+        min_col_widths = auxiliary_df.max().to_list()
+
+        # Define inter-column spacing
+        spacing = 2
+
+        # Add inter-column spacing to all columns but the first
+        col_widths = [min_col_widths[0]] + [min_col_width + spacing for min_col_width in min_col_widths[1:]]
+
+        # Define header formatting
+        def format_header(i, header):
+            if i == 0:
+                return f'{header : <{col_widths[i]}}'
+            else:
+                return f'{header : >{col_widths[i]}}'
+        
+        # Define entry formatting
+        def format_entry(i, entry):
+            if i == 0:
+                return f'{entry : <{col_widths[i]}}'
+            else:
+                return f'{entry:{col_widths[i]}.{n_decimals}f}'
+
+        # Print column headers
+        print(''.join([format_header(i, header) for i, header in enumerate(perf_metrics.reset_index())]))
+
+        # Print row seperator
+        print('-' * sum(col_widths))
+
+        # Print all rows except last
+        for index, row in perf_metrics.reset_index().iloc[:-1].iterrows():
+            print(''.join([format_entry(i, entry) for i, entry in enumerate(row)]))
+
+        # Print row separator
+        print('-' * sum(col_widths))
+
+        # Print last row
+        print(''.join([format_entry(i, entry) for i, entry in enumerate(perf_metrics.reset_index().iloc[-1])]))
+
+    # Save performance metrics
     if save_as != False:
         perf_metrics.to_csv(save_as)
 
+    # Return preformance metrics
     return perf_metrics
