@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 from sklearn import metrics
 from sklearn.utils import shuffle as shuffle_arrays
-from sklearn.preprocessing import StandardScaler
-import torch
 
 def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state=42, verbose=True):
     '''
