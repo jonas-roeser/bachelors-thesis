@@ -927,3 +927,85 @@ def plot_history(history, save_as=None):
     plt.close()
 
 
+def plot_log(predictions, save_as=None):
+    '''
+    Plot model predictions on a log scale.
+    
+    Parameters
+    ----------
+    predictions : DataFrame
+        Predictions data frame consisting of y_true and y_pred.
+    save_as : str, default None
+        Where to save the plot in pdf format.
+    
+    Returns
+    -------
+    None
+        Plots model predictions on log scale.
+    '''
+    # Change font to LaTeX
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': [],
+
+        # Fine-tune font-size
+        'font.size': 12.0, # 10.0
+        'figure.titlesize': 14.4, # 'large' (12.0)
+        'figure.labelsize': 12.0, # 'large' (12.0)
+        'axes.titlesize': 12.0, # 'large' (12.0)
+        'axes.labelsize': 10.95, # 'medium' (10.0)
+        'legend.title_fontsize': 10.95, # None (10.0)
+        'legend.fontsize': 10.0, # 'medium' (10.0)
+        'xtick.labelsize': 10.0, # 'medium' (10.0)
+        'ytick.labelsize': 10.0 # 'medium' (10.0)
+        })
+    
+    # Sort predictions by y_true
+    predictions.sort_values('y_true', inplace=True)
+
+    # Initialise figure
+    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4))
+
+    # Plot data
+    ax.plot(range(len(predictions)), predictions.y_true, linestyle='solid', color='black', label='$y_{true}$')
+    ax.scatter(range(len(predictions)), predictions.y_pred, s=1, color='#c1272d', label='$y_{pred}$')
+
+    # Set labels
+    ax.set_xlabel('Index')
+    ax.set_ylabel('Value')
+
+    # Show legend
+    ax.legend(frameon=False)
+
+    # Set ticks
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+    ax.set_yscale('log')
+
+    # Set axis limits
+    x_min = 0
+    x_max = len(predictions)
+    y_min = min(min(predictions.y_true), min(predictions.y_pred))
+    y_max = max(max(predictions.y_true), max(predictions.y_pred))
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min - 0.1 * (y_max - y_min), y_max + 0.1 * (y_max - y_min))
+
+    # Remove figure padding
+    plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
+    left = max(fig.subplotpars.left, 1 - fig.subplotpars.right)
+    spine_top_rel_height = ax.spines['top'].get_linewidth() / 72 / fig.get_size_inches()[1]
+    fig.subplots_adjust( # does not work in .ipynb
+        left=left,
+        right=1 - left,
+        top=1 - .5 * spine_top_rel_height if ax.get_title() == '' else fig.subplotpars.top)
+
+    # Save figure
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_as, dpi=300) # set dpi for any rasterized parts of figure
+    
+    # Show plot
+    plt.show()
+    plt.close()
+
