@@ -1019,8 +1019,8 @@ def plot_history(history, save_as=None):
     fig, ax = plt.subplots(figsize=(textwidth, 4))
 
     # Plot data
-    ax.plot(history.index, history.loss_train, linestyle='dashed', color='black', label='$RMSE_{train}$')
-    ax.plot(history.index, history.loss_val, color='#c1272d', label='$RMSE_{val}$')
+    ax.plot(history.index, history.rmse_train, linestyle='dashed', color='black', label='$RMSE_{train}$')
+    ax.plot(history.index, history.rmse_val, color='#c1272d', label='$RMSE_{val}$')
 
     # Set labels
     ax.set_xlabel('Epoch')
@@ -1035,8 +1035,8 @@ def plot_history(history, save_as=None):
     # Set axis limits
     x_min = min(history.index)
     x_max = max(history.index)
-    y_min = min(min(history.loss_train), min(history.loss_val))
-    y_max = max(max(history.loss_train), max(history.loss_val))
+    y_min = min(min(history.rmse_train), min(history.rmse_val))
+    y_max = max(max(history.rmse_train), max(history.rmse_val))
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min - 0.1 * (y_max - y_min), y_max + 0.1 * (y_max - y_min))
 
@@ -1059,7 +1059,7 @@ def plot_history(history, save_as=None):
     plt.close()
 
 
-def plot_log(predictions, save_as=None):
+def plot_output_sorted_by_actuals(predictions, save_as=None):
     '''
     Plot model predictions on a log scale.
     
@@ -1142,7 +1142,7 @@ def plot_log(predictions, save_as=None):
     plt.close()
 
 
-def plot_scatter(predictions, save_as=None):
+def plot_pred_vs_actual(predictions, save_as=None):
     '''
     Plot model predictions as scatter plot.
     
