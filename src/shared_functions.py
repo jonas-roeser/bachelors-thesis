@@ -462,6 +462,7 @@ def data_overview(df):
     return data_overview
 
 
+def get_predictions(model, dataset, subset_index, device='cpu', subset_keys=['train', 'val', 'test'], save_as=None):
     '''
     Generate predictions with machine learning model.
     
@@ -469,35 +470,45 @@ def data_overview(df):
     ----------
     model : model
         Model to generate predictions with.
-    X_tensors : dict of tensors
-        Dictionary of input tensors with subset keys.
-    y_split : dict of arrays
-        Dictionary of output arrays with subset keys.
+    dataset : MultiModalDataset
+        Instance of a MultiModalDataset.
+    subset_index : Series
+        Series containing subset key for each index value.
+    device : str, default 'cpu'
+        Device to use for generating predictions
     subset_keys : list, default ['train', 'val', 'test']
         List of subset keys.
-    save_as : bool, default Fals
-        Whether to save predictions in csv format at the specified location.
+    save_as : str, default None
+        Where to save predictions in csv format.
     
     Returns
     -------
     predictions : DataFrame
         Generated model predictions sorted by index.
     '''
-    predictions = pd.DataFrame({'y_true': pd.concat([y_split[subset_key] for subset_key in subset_keys])})
+    # Add expected outputs
+    y_true = dataset.y.squeeze()
+
+    # Generate model predictions
+    y_pred = []
+    model.eval() # deactivates potential Dropout and BatchNorm
+    for i, sample in enumerate(DataLoader(dataset)):
+        with torch.no_grad():
+            # Pass batch to GPU
+            X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
+
+            # Forward pass
+            y_pred.append(model(*X).item())
     
-    # Add model predictions
-    y_pred = [model(X_tensors[subset_key]) for subset_key in subset_keys]
-    predictions['y_pred'] = [pred.item() for subset in y_pred for pred in subset]
-    
-    # Add subset keys
-    subsets = [[subset_key] * len(y_split[subset_key]) for subset_key in subset_keys]
-    predictions['subset'] = [key for subset in subsets for key in subset]
+    # Create predictions data frame
+    predictions = pd.DataFrame({'y_true': y_true, 'y_pred': y_pred, 'subset': subset_index.subset})
 
     # Sort predictions by index
     predictions.sort_index(inplace=True)
 
     # Save predictions
-    if save_as != True:
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
         predictions.to_csv(save_as)
     
     # Return predictions
