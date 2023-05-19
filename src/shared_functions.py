@@ -14,73 +14,114 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from sklearn import metrics as sklearn_metrics
 
-def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state=42, return_keys=True, save_subset_sizes_as=False, verbose=True):
+def subset_index(index, test_size=.2, val_size=0, k_folds=None, shuffle=True, random_state=42, return_keys=True, save_index_as=None, save_keys_as=None, save_sizes_as=None, verbose=True):
     '''
     Split arrays into training, validation and testing subsets.
     
     Parameters
     ---------
-    *arrays : array or dataframe
-        Arbitrary number of arrays to split.
-    val_size : int or float
-        Size of validation subset in absolute or relative terms.
-    test_ size : int or float
+    index : index or array
+        Index used for subsetting.
+    test_ size : int or float, default .2
         Size of testing subset in absolute or relative terms.
+    val_size : int or float, default 0
+        Size of validation subset in absolute or relative terms.
+    k_folds : int, default None
+        Number of folds for cross-validation.
     shuffle : bool, default True
         Whether to shuffle the dataset before splitting.
     random_state : int, default 42
         Determines random number generation for shuffling the data. None results in non-deterministic results.
     return_keys : bool, default True
-        Whether to return a list of subset keys.
-    save_subset_sizes_as : bool, default False
-        Whether to save subset sizes in csv format at the specified location.
+        Whether to return subset keys.
+    save_index_as : str, default None
+        Where to save subset index in csv format.
+    save_keys_as : str, default None
+        Where to save subset keys in csv format.
+    save_sizes_as : str, default None
+        Where to save subset sizes in csv format.
     verbose : bool, default True
         Whether to print subset sizes to the console.
     
     Returns
     -------
-    dict_list : list of dictionaries
-        List of dictionaries, each containing train, val and test subsets split using val_size and test_size.
-    subset_keys : list
-        List of subset keys.
+    subset_index : Series
+        Series of subsets, properly indexed.
     '''
-    # Define subset keys
-    subset_keys = ['train', 'val', 'test']
-    
-    # Use length of first array as reference point
-    array_len = len(arrays[0])
+    # Use length of index as reference point
+    index_len = len(index)
 
-    # Compare lengths of all arrys to length of first array
-    if not all(len(array) == array_len for array in arrays):
-        raise ValueError('Arrays must be of equal length!')
-    
-    # Shuffle all arrays consistently
+    # Turn index into list if not already a list
+    if not isinstance(index, list):
+        index = index.to_list()
+
+    # Shuffle index based on random state
     if shuffle == True:
-        arrays = shuffle_arrays(*arrays, random_state=random_state)
+        random.Random(random_state).shuffle(index)
 
-    # Calculate absolute size of validation set if not already given
-    if type(val_size) is float:
-        val_size = int(array_len * val_size)
+    # Prepare for splitting arrays into k-folds and testing set
+    if k_folds is not None:
+        # Calculate absolute size of testing set if not already given
+        if type(test_size) is float:
+            test_size = int(index_len * test_size)
+        
+        # Calculate absolute size of c set based on size of testing set
+        fold_size = int((index_len - test_size) / k_folds)
+
+        # Account for remainder of k_fold division by allowing size of testing set to increase
+        test_size = index_len - k_folds * fold_size
+        
+        # Create list of subset keys
+        subset_keys = []
+
+        # Add subset key for every fold
+        for fold in range(1, k_folds + 1):
+            subset_keys.append(f'fold_{fold}')
+
+        # Create dictionary for subset sizes
+        size_dict = {subset_key: fold_size for subset_key in subset_keys}
+        
+        # Add subset key for testing set
+        subset_keys.append('test')
+
+        # Add size of testing set to dictionary
+        size_dict['test'] = test_size
     
-    # Calculate absolute size of testing set if not already given
-    if type(test_size) is float:
-        test_size = int(array_len * test_size)
-    
-    # Calculate absolute size of training set based on size of validation and testing set
-    train_size = array_len - (val_size + test_size)
+    # Prepare for splitting arrays into training, validation and testing sets
+    else:
+        # Calculate absolute size of validation set if not already given
+        if type(val_size) is float:
+            val_size = int(index_len * val_size)
+        
+        # Calculate absolute size of testing set if not already given
+        if type(test_size) is float:
+            test_size = int(index_len * test_size)
+        
+        # Calculate absolute size of training set based on size of validation and testing set
+        train_size = index_len - (val_size + test_size)
+
+        # Define subset keys
+        subset_keys = ['train', 'val', 'test']
+
+        # Create dictionary for subset sizes
+        size_dict = {
+            'train': train_size,
+            'val': val_size,
+            'test': test_size
+            }
 
     # Create dataframe for storing subset sizes
-    if verbose == True or save_subset_sizes_as != None:
+    if verbose == True or save_sizes_as is not None:
         subset_sizes = pd.DataFrame(columns=['Size (n)', 'Size (%)'], index=pd.Index(subset_keys, name='Subset'))
 
-        # Store size of each subset
-        subset_sizes.loc['train'] = [train_size, train_size / array_len]
-        subset_sizes.loc['val'] = [val_size, val_size / array_len]
-        subset_sizes.loc['test'] = [test_size, test_size / array_len]
+        # Store size of each subset in data frame
+        for subset_key in subset_keys:
+            subset_sizes.loc[subset_key] = [size_dict[subset_key], size_dict[subset_key] / index_len]
 
-        # Store total size
-        subset_sizes.loc['total'] = [array_len, array_len / array_len]
+        # Store total size in data frame
+        subset_sizes.loc['total'] = [index_len, index_len / index_len]
 
+    # Print information to console
     if verbose == True:
         # Include index in column width computation
         auxiliary_df = subset_sizes.reset_index()
@@ -135,8 +176,8 @@ def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state
         print('-' * sum(col_widths))
 
         # Print all rows except last
-        for index, row in subset_sizes.reset_index().iloc[:-1].iterrows():
-            print(''.join([format_entry(i, entry) for i, entry in enumerate(row)]))
+        for rownum, row in subset_sizes.reset_index().iloc[:-1].iterrows():
+            print(''.join([format_entry(colnum, entry) for colnum, entry in enumerate(row)]))
 
         # Print row separator
         print('-' * sum(col_widths))
@@ -144,26 +185,42 @@ def train_test_val_dict(*arrays, val_size, test_size, shuffle=True, random_state
         # Print last row
         print(''.join([format_entry(i, entry) for i, entry in enumerate(subset_sizes.reset_index().iloc[-1])]))
 
-    # Save subset sizes
-    if save_subset_sizes_as != None:
-        subset_sizes.to_csv(save_subset_sizes_as)
+    # Create subset index
+    subset_list = [[subset_key] * size_dict[subset_key] for subset_key in subset_keys]
 
-    # Create list of subset dictionaries
-    dict_list = []
-
-    # For each array create a dictionary containing a train, val and test subset
-    for array in arrays:
-        dict_list.append({
-            'train': array[:train_size],
-            'val': array[train_size:-test_size],
-            'test': array[-test_size:]
-            })
+    # Unpack subset index
+    subset_list = [subset_key for subset in subset_list for subset_key in subset]
     
-    # Return list of dictionaries and subset keys
+    # Crate subset index from subset list
+    subset_index = pd.DataFrame({'subset': subset_list}, index=index)
+
+    # Sort subset index by index
+    subset_index.sort_index(inplace=True)
+    
+    # Save subset index
+    if save_index_as is not None:
+        Path(os.path.dirname(save_index_as)).mkdir(parents=True, exist_ok=True)
+        subset_index.to_csv(save_index_as)
+    
+    # Save subset keys
+    if save_keys_as is not None:
+        Path(os.path.dirname(save_keys_as)).mkdir(parents=True, exist_ok=True)
+        pd.Series(subset_keys).to_csv(save_keys_as, index=False)
+    
+    # Save subset sizes
+    if save_sizes_as is not None:
+        Path(os.path.dirname(save_sizes_as)).mkdir(parents=True, exist_ok=True)
+        subset_sizes.to_csv(save_sizes_as)
+    
+    # Return subset index and subset keys
     if return_keys == True:
-        return *dict_list, subset_keys
+        return subset_index, subset_keys
+    
+    # Return subset index
     else:
-        return dict_list
+        return subset_index
+
+
 
 
 def get_predictions(model, X_tensors, y_split, subset_keys=['train', 'val', 'test'], save_as=False):
