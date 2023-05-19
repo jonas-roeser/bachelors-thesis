@@ -846,3 +846,84 @@ def get_image_boundaries(location_lat, location_long, width_px, height_px, zoom_
 
     # Return image boundaries as coordinates
     return lat_top, lat_bottom, long_left, long_right
+
+
+def plot_history(history, save_as=None):
+    '''
+    Plot a model's training history.
+    
+    Parameters
+    ----------
+    predictions : DataFrame
+        Training history of a model.
+    save_as : str, default None
+        Where to save training history in pdf format.
+    
+    Returns
+    -------
+    None
+        Plots training history.
+    '''
+    # Change font to LaTeX
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': [],
+
+        # Fine-tune font-size
+        'font.size': 12.0, # 10.0
+        'figure.titlesize': 14.4, # 'large' (12.0)
+        'figure.labelsize': 12.0, # 'large' (12.0)
+        'axes.titlesize': 12.0, # 'large' (12.0)
+        'axes.labelsize': 10.95, # 'medium' (10.0)
+        'legend.title_fontsize': 10.95, # None (10.0)
+        'legend.fontsize': 10.0, # 'medium' (10.0)
+        'xtick.labelsize': 10.0, # 'medium' (10.0)
+        'ytick.labelsize': 10.0 # 'medium' (10.0)
+        })
+    
+    # Initialise figure
+    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4))
+
+    # Plot data
+    ax.plot(history.index, history.loss_train, linestyle='dashed', color='black', label='$RMSE_{train}$')
+    ax.plot(history.index, history.loss_val, color='#c1272d', label='$RMSE_{val}$')
+
+    # Set labels
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('RMSE')
+
+    # Show legend
+    ax.legend(frameon=False)
+
+    # Set ticks
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+
+    # Set axis limits
+    x_min = min(history.index)
+    x_max = max(history.index)
+    y_min = min(min(history.loss_train), min(history.loss_val))
+    y_max = max(max(history.loss_train), max(history.loss_val))
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min - 0.1 * (y_max - y_min), y_max + 0.1 * (y_max - y_min))
+
+    # Remove figure padding
+    plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
+    left = max(fig.subplotpars.left, 1 - fig.subplotpars.right)
+    spine_top_rel_height = ax.spines['top'].get_linewidth() / 72 / fig.get_size_inches()[1]
+    fig.subplots_adjust( # does not work in .ipynb
+        left=left,
+        right=1 - left,
+        top=1 - .5 * spine_top_rel_height if ax.get_title() == '' else fig.subplotpars.top)
+
+    # Save figure
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_as, dpi=300) # set dpi for any rasterized parts of figure
+    
+    # Show plot
+    plt.show()
+    plt.close()
+
+
