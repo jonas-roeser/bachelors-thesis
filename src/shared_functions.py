@@ -427,7 +427,41 @@ class MultiModalDataset(Dataset):
         return self.X_text[index], *X_images, self.y[index]
 
 
-def get_predictions(model, X_tensors, y_split, subset_keys=['train', 'val', 'test'], save_as=False):
+def data_overview(df):
+    '''
+    Generate overview of a data frame.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Data frame for which to generate an overview.
+    
+    Returns
+    -------
+    data_overview : pd.DataFrame
+        Overview of the data frame.
+    '''
+    # Create data overview
+    data_overview = pd.DataFrame({'column': df.columns.values})
+
+    # Get values for each column
+    for i, column in enumerate(df):
+        # Get data type
+        data_overview.loc[i, 'dtype'] = df[column].dtype
+
+        # Get number of unique values
+        data_overview.loc[i, 'n_unique'] = df[column].nunique()
+
+        # Get number of NA values
+        data_overview.loc[i, 'n_missing'] = df[column].isna().sum()
+
+    # Use most recent pandas data types (e.g. pd.NA)
+    data_overview = data_overview.convert_dtypes()
+
+    # Return data overview
+    return data_overview
+
+
     '''
     Generate predictions with machine learning model.
     
