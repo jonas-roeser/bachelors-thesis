@@ -221,6 +221,210 @@ def subset_index(index, test_size=.2, val_size=0, k_folds=None, shuffle=True, ra
         return subset_index
 
 
+class MultiModalDataset(Dataset):
+    '''
+    Custom class for multi model dataset.
+
+    '''
+
+    def __init__(self, data, target_name, to_drop=None, image_directory=None, image_transformation=transforms.ToTensor(), subset_index=None, subset=None, input_scaler=None, target_scaler=None, categorical_encoder=None, numerical_imputer=None, data_overview=None):
+        '''        
+        Parameters
+        ----------
+        data : str
+            Path to text data.
+        target_name : str
+            Name of target variable.
+        to_drop : str or list
+            Variables to drop.
+        image_directory : str or list of str, default None
+            Image directory or list of image directories.
+        image_transformation : callable, default transforms.ToTensor()
+            Function for transforming image vectors.
+        subset_index : str, default None
+            Path to subset index.
+        subset : str, default None
+            Subset to return, if None returns all data.
+        input_scaler : callable, default None
+            Scaler for scaling the input vector.
+        target_scaler : callable, default None
+            Scaler for scaling the target vector.
+        categorical_encoder : callable, default None
+            Encoder for encoding categorical variables.
+        numerical_imputer : callable, default None
+            Imputer for imputing numerical variables.
+        data_overview : str, default None
+            Path to data overview.
+        '''
+        # Load text data
+        self.data = pd.read_parquet(data)
+
+        # Define target variable
+        self.target_name = target_name
+
+        # Define variables to drop
+        if to_drop is not None and not isinstance(to_drop, list):
+            to_drop = [to_drop]
+        to_drop = to_drop if to_drop else []
+
+        # Drop specified variables
+        self.data = self.data.drop(columns=to_drop)
+
+        # Define image directory
+        if image_directory is not None and not isinstance(image_directory, list):
+            image_directory = [image_directory]
+        self.image_directory = image_directory if image_directory else []
+
+        # Define subset index
+        self.subset_index = subset_index
+
+        # Define subset
+        self.subset = subset
+
+        # Use entire index as training index if not overwritten by subset index
+        training_index = self.data.index
+
+        # Load subset index
+        if self.subset_index is not None:
+            self.subset_index = pd.read_csv(self.subset_index, index_col=0)
+
+            # Store training & non-training index for fitting scalers, encoders & imputers before it is overwritten
+            training_index = self.subset_index[self.subset_index.subset == 'train'].index
+            non_training_index = self.subset_index[self.subset_index.subset != 'train'].index
+
+            # Limit subset index to subset
+            if self.subset is not None:
+                self.subset_index = self.subset_index[self.subset_index.subset == subset]
+
+        # Define image transformations
+        self.image_transformation = image_transformation
+
+        # Define other transformations
+        self.input_scaler = input_scaler
+        self.target_scaler = target_scaler
+        self.categorical_encoder = categorical_encoder
+        self.numerical_imputer = numerical_imputer
+
+        # Require data overview when either categorical encoder or numerical imputer is set
+        if data_overview is None and (self.categorical_encoder is not None or self.numerical_imputer is not None):
+            raise AttributeError('data overview is required when either categorical encoder or numerical imputer is set')
+
+        # Get dictionary of columns for each variable type
+        if data_overview is not None:
+            # Load data overview
+            data_overview = pd.read_csv(data_overview, index_col=0)
+
+            # Remove target variable from data overview
+            data_overview = data_overview.loc[data_overview.column != self.target_name]
+
+            # Remove dropped variables from data overview
+            data_overview = data_overview.loc[~data_overview.column.isin(to_drop)]
+
+            # Create dictionary for storing variable types
+            self.variable_types = {}
+            
+            # Store list of columns for each variable type
+            for variable_type in data_overview.variable_type.unique():
+                self.variable_types[variable_type] = data_overview.column[data_overview.variable_type == variable_type].to_list()
+
+        # Create target vector
+        self.y = self.data[[self.target_name]]
+        
+        # Apply target scaler
+        if self.target_scaler is not None:
+            # Fit scaler on training set
+            self.target_scaler.fit(self.y.loc[training_index])
+
+            # Scale values in entire set
+            self.y = pd.DataFrame(self.target_scaler.transform(self.y), index=self.y.index)
+
+        # Create input vector
+        self.X_text = self.data.drop(columns=self.target_name)
+
+        # Encode categorical variables
+        if self.categorical_encoder is not None:
+            # Fit encoder on training set
+            self.categorical_encoder.fit(self.X_text.loc[training_index, self.variable_types['categorical']], self.y.loc[training_index])
+
+            # Encode values in entire set: as per category_econders docs, y should be provided when transforming input vector of training set
+            self.X_text.loc[training_index, self.variable_types['categorical']] = self.categorical_encoder.transform(self.X_text.loc[training_index, self.variable_types['categorical']], self.y.loc[training_index])
+
+            # This becomes superflous when subset index is None, since in that case training_index = self.data.index 
+            if subset_index is not None:
+                # y should not be provided when tranforming input vector of non-training set
+                self.X_text.loc[non_training_index,self.variable_types['categorical']] = self.categorical_encoder.transform(self.X_text.loc[non_training_index, self.variable_types['categorical']])
+
+        # Impute numerical variables
+        if self.numerical_imputer is not None:
+            # Fit imputer on training set
+            self.numerical_imputer.fit(self.X_text.loc[training_index, self.variable_types['numerical']])
+
+            # Impute values in entire set
+            self.X_text[self.variable_types['numerical']] = self.numerical_imputer.transform(self.X_text[self.variable_types['numerical']])
+
+        # Apply input scaler
+        if self.input_scaler is not None:
+            # Fit scaler on training set
+            self.input_scaler.fit(self.X_text.loc[training_index])
+
+            # Scale values in entire set
+            self.X_text = self.input_scaler.transform(self.X_text)
+
+        # Convert input and target vectors to numpy arrays
+        self.X_text = self.X_text.astype('float32')
+        if isinstance(self.X_text, pd.Series) or isinstance(self.X_text, pd.DataFrame):
+            self.X_text = self.X_text.to_numpy()
+        self.y = self.y.astype('float32')
+        if isinstance(self.y, pd.Series) or isinstance(self.y, pd.DataFrame):
+            self.y = self.y.to_numpy()
+        
+        # Limit input and target vectors to subset index
+        self.X_text = self.X_text[self.data.index.get_indexer(self.subset_index.index)]
+        self.y = self.y[self.data.index.get_indexer(self.subset_index.index)]
+        
+        # Store input and target vectors as tensors
+        self.X_text = torch.tensor(self.X_text, dtype=torch.float32)
+        self.y = torch.tensor(self.y, dtype=torch.float32)
+
+    # Get length of data
+    def __len__(self):
+        # If subset index is used, base length on subset index, since it might not include all text data
+        if self.subset_index is not None:
+            return len(self.subset_index)
+        
+        # Otherwise base length on text data
+        else:
+            return len(self.text_data)
+
+    # Get actual data
+    def __getitem__(self, index):
+        # Convert iloc index into loc index
+        if self.subset_index is not None:
+            loc_index = self.subset_index.index[index]
+        else:
+            loc_index = self.data.index[index]
+
+        X_images = []
+        # Create image vectors
+        if self.image_directory:
+            # Load one image from every directory
+            for i, directory in enumerate(self.image_directory):
+                # Load image using PIL
+                image = Image.open(f'{directory}{loc_index}.png').convert('RGB')
+
+                # Apply transformations to the image
+                if self.image_transformation is not None:
+                    image = self.image_transformation(image)
+
+                # Store image vector as tensor (should already happen during transform)
+                if not torch.is_tensor(image):
+                    image = transforms.ToTensor()(image)
+                
+                # Add image to list
+                X_images.append(image)
+
+        # Return sample dictionary
+        return self.X_text[index], *X_images, self.y[index]
 
 
 def get_predictions(model, X_tensors, y_split, subset_keys=['train', 'val', 'test'], save_as=False):
