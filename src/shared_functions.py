@@ -686,7 +686,7 @@ def get_satellite_image(location_lat, location_long, zoom_level, size, maptype, 
         }
 
     # Sign URL
-    if secret != None:
+    if secret is not None:
         url = sign_url(requests.Request('GET', url, params=params).prepare().url, secret=secret)
     
     # Request image from Google Maps Static API
@@ -694,6 +694,7 @@ def get_satellite_image(location_lat, location_long, zoom_level, size, maptype, 
 
     # Return image
     return image
+
 
 # Define function for getting satellite image
 def save_satellite_image(save_as, overwrite, *args):
@@ -703,7 +704,7 @@ def save_satellite_image(save_as, overwrite, *args):
     Parameters
     ----------
     save_as : str
-        Location where to save image.
+        Where to save image.
     overwrite : bool
         Whether to overwrite existing image.
     *args : float
@@ -727,6 +728,7 @@ def save_satellite_image(save_as, overwrite, *args):
         # Save image
         with open(save_as, 'wb') as f:
             f.write(image)
+
 
 def m_per_px(zoom_level, location_lat):
     '''
