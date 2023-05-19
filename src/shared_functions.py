@@ -462,7 +462,7 @@ def data_overview(df):
     return data_overview
 
 
-def get_predictions(model, dataset, subset_index, device='cpu', subset_keys=['train', 'val', 'test'], save_as=None):
+def get_predictions(model, dataset, subset_index, device='cpu', save_as=None):
     '''
     Generate predictions with machine learning model.
     
@@ -476,8 +476,6 @@ def get_predictions(model, dataset, subset_index, device='cpu', subset_keys=['tr
         Series containing subset key for each index value.
     device : str, default 'cpu'
         Device to use for generating predictions
-    subset_keys : list, default ['train', 'val', 'test']
-        List of subset keys.
     save_as : str, default None
         Where to save predictions in csv format.
     
@@ -486,19 +484,26 @@ def get_predictions(model, dataset, subset_index, device='cpu', subset_keys=['tr
     predictions : DataFrame
         Generated model predictions sorted by index.
     '''
-    # Add expected outputs
+    # Store expected outputs
     y_true = dataset.y.squeeze()
 
-    # Generate model predictions
-    y_pred = []
+    # Activate validation mode
     model.eval() # deactivates potential Dropout and BatchNorm
+
+    # Create list for storing model predictions
+    y_pred = []
+
+    # Iterate over all batches
     for i, sample in enumerate(DataLoader(dataset)):
         with torch.no_grad():
             # Pass batch to GPU
             X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
 
-            # Forward pass
-            y_pred.append(model(*X).item())
+            # Run forward pass
+            prediction = model(*X)
+
+            # Store prediction
+            y_pred.append(prediction.item())
     
     # Create predictions data frame
     predictions = pd.DataFrame({'y_true': y_true, 'y_pred': y_pred, 'subset': subset_index.subset})
