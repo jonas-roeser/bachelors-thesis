@@ -515,7 +515,7 @@ def get_predictions(model, dataset, subset_index, device='cpu', subset_keys=['tr
     return predictions
 
 
-def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False, verbose=True):
+def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=None, verbose=True):
     '''
     Calculate performance metrics for machine learning model.
     
@@ -525,8 +525,8 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
         Contains index, y_true, y_pred and subset.
     subset_keys : list, default ['train', 'val', 'test']
         List of subset keys.
-    save_as : bool, default False
-        Whether to save performance metrics in csv format at the specified location.
+    save_as : str, default None
+        Where to save performance metrics in csv format.
     verbose : bool, default True
         Whether to print metrics to the console.
     
@@ -539,9 +539,6 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
     perf_metrics = pd.DataFrame(index=pd.Index(subset_keys, name='Subset'))
     
     # Define functions for calculating performance metrics
-    def cpe(y_true, y_pred):
-        return sum(abs(y_true - y_pred)) / sum(y_true)
-    
     def rmse(y_true, y_pred):
         return sklearn_metrics.mean_squared_error(y_true, y_pred, squared=False)
         # (sum((y_true - y_pred) ** 2) / len(y_true)) ** 0.5
@@ -549,15 +546,17 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
     def mae(y_true, y_pred):
         return sklearn_metrics.mean_absolute_error(y_true, y_pred)
         # sum(abs(y_true - y_pred)) / len(y_true)
+    
+    def mape(y_true, y_pred):
+        return sklearn_metrics.mean_absolute_percentage_error(y_true, y_pred)
+        # sum(abs(y_true - y_pred) / y_true) / len(y_true)
 
     def r2(y_true, y_pred):
         return sklearn_metrics.r2_score(y_true, y_pred)
         # 1 - (sum((y_true - y_pred) ** 2) / sum((y_true - np.mean(y_true)) ** 2))
-    
-    # Since actuals are close to 0, MAPE would result in a very high value and is therefore not used
 
     # Create list containing all functions for calculating performance metrics
-    metric_functions = [cpe, rmse, mae, r2]
+    metric_functions = [rmse, mae, mape, r2]
 
     # Calculate performance metrics for each subset
     for subset in perf_metrics.index:
@@ -577,6 +576,7 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
     for metric_function in metric_functions:
         perf_metrics.loc['total', metric_function.__name__.upper()] = metric_function(y_true, y_pred)
 
+    # Print information to console
     if verbose == True:
         # Include index in column width computation
         auxiliary_df = perf_metrics.reset_index()
@@ -639,7 +639,8 @@ def get_metrics(predictions, subset_keys=['train', 'val', 'test'], save_as=False
         print(''.join([format_entry(i, entry) for i, entry in enumerate(perf_metrics.reset_index().iloc[-1])]))
 
     # Save performance metrics
-    if save_as != False:
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
         perf_metrics.to_csv(save_as)
 
     # Return preformance metrics
