@@ -1052,21 +1052,27 @@ def plot_histogram(values, save_as=None):
     plt.close()
 
 
-def plot_output_sorted_by_actuals(predictions, save_as=None):
+def plot_satellite_image(index, location_lat, location_long, zoom_level, save_as=None):
     '''
-    Plot model predictions on a log scale.
+    Plot model predictions vs actuals as a heatmap.
     
     Parameters
     ----------
-    predictions : DataFrame
-        Predictions data frame consisting of y_true and y_pred.
+    image : PIL
+        Satelllit iamge to plot.
+    location_lat : float
+        Latitude of the image centre point.
+    location_long : float
+        Longitude of the iamge centre point.
+    zoom_level : int
+        Zoom level of the satellite image.
     save_as : str, default None
         Where to save the plot in pdf format.
     
     Returns
     -------
     None
-        Plots model predictions on log scale.
+        Plots satellite image.
     '''
     # Change font to LaTeX
     plt.rcParams.update({
@@ -1085,9 +1091,52 @@ def plot_output_sorted_by_actuals(predictions, save_as=None):
         'xtick.labelsize': 10.0, # 'medium' (10.0)
         'ytick.labelsize': 10.0 # 'medium' (10.0)
         })
+
+    # Load image
+    image = Image.open(f'../data/raw/satellite-images_new-york-city_2022_640x640_{zoom_level}/{index}.png')
     
-    # Sort predictions by y_true
-    predictions.sort_values('y_true', inplace=True)
+    # Initialise figure
+    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4))
+    
+    # Get outer image coordinates
+    lat_top, lat_bottom, long_left, long_right = get_image_boundaries(location_lat, location_long, image.size[0], image.size[1], zoom_level)
+
+    # Get aspect ratio
+    aspect_ratio = (long_right - long_left) / (lat_top - lat_bottom)
+
+    # Plot image
+    ax.imshow(image, extent=[long_left, long_right, lat_bottom, lat_top], aspect=aspect_ratio)
+
+    # Plot house location
+    ax.scatter(location_long, location_lat, s=100, marker='h', c='#c1272d', edgecolors='black')
+
+    # Set labels
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+
+    # Set ticks
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.3f}°'))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.3f}°'))
+
+    # Remove figure padding
+    plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
+    left = max(fig.subplotpars.left, 1 - fig.subplotpars.right)
+    spine_top_rel_height = ax.spines['top'].get_linewidth() / 72 / fig.get_size_inches()[1]
+    fig.subplots_adjust( # does not work in .ipynb
+        left=left,
+        right=1 - left,
+        top=1 - .5 * spine_top_rel_height if ax.get_title() == '' else fig.subplotpars.top)
+
+    # Save figure
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_as, dpi=300) # set dpi for any rasterized parts of figure
+    
+    # Show plot
+    plt.show()
+    plt.close()
+
 
     # Initialise figure
     textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
