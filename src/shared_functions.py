@@ -1076,8 +1076,8 @@ def plot_histogram(values, save_as=None):
         })
 
     # Initialise figure
-    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
-    fig, ax = plt.subplots(figsize=(textwidth, 4))
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
 
     # Plot histogram
     ax.hist(values, bins = 30, color = '#006795', edgecolor = 'white')
@@ -1157,8 +1157,8 @@ def plot_satellite_image(index, location_lat, location_long, zoom_level, save_as
     image = Image.open(f'../data/raw/satellite-images_new-york-city_2022_640x640_{zoom_level}/{index}.png')
     
     # Initialise figure
-    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
-    fig, ax = plt.subplots(figsize=(textwidth, 4))
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
     
     # Get outer image coordinates
     lat_top, lat_bottom, long_left, long_right = get_image_boundaries(location_lat, location_long, image.size[0], image.size[1], zoom_level)
@@ -1234,8 +1234,8 @@ def plot_history(history, save_as=None):
         })
     
     # Initialise figure
-    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
-    fig, ax = plt.subplots(figsize=(textwidth, 4))
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
 
     # Plot data
     ax.plot(history.index, history.RMSE_train, linestyle='dashed', color='black', label='$RMSE_{train}$')
@@ -1313,8 +1313,8 @@ def plot_pred_vs_actual(predictions, save_as=None):
         })
 
     # Initialise figure
-    textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
-    fig, ax = plt.subplots(figsize=(textwidth, 4))
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
 
     # Plot heatmap
     heatmap, xedges, yedges = np.histogram2d(predictions.y_true, predictions.y_pred, bins=50, range=[[0, 10*10**6], [0, 10*10**6]])
