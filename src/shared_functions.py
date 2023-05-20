@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from category_encoders import OrdinalEncoder
 from pytorch_utils import EarlyStopping, MultiEpochsDataLoader
 from sklearn import metrics as sklearn_metrics
 
@@ -343,19 +344,6 @@ class MultiModalDataset(Dataset):
         # Create input vector
         self.X_text = self.data.drop(columns=self.target_name)
 
-        # Encode categorical variables
-        if self.categorical_encoder is not None:
-            # Fit encoder on training set
-            self.categorical_encoder.fit(self.X_text.loc[training_index, self.variable_types['categorical']], self.y.loc[training_index])
-
-            # Encode values in entire set: as per category_econders docs, y should be provided when transforming input vector of training set
-            self.X_text.loc[training_index, self.variable_types['categorical']] = self.categorical_encoder.transform(self.X_text.loc[training_index, self.variable_types['categorical']], self.y.loc[training_index])
-
-            # This becomes superflous when subset index is None, since in that case training_index = self.data.index 
-            if subset_index is not None:
-                # y should not be provided when tranforming input vector of non-training set
-                self.X_text.loc[non_training_index,self.variable_types['categorical']] = self.categorical_encoder.transform(self.X_text.loc[non_training_index, self.variable_types['categorical']])
-
         # Impute numerical variables
         if self.numerical_imputer is not None:
             # Fit imputer on training set
@@ -363,6 +351,43 @@ class MultiModalDataset(Dataset):
 
             # Impute values in entire set
             self.X_text[self.variable_types['numerical']] = self.numerical_imputer.transform(self.X_text[self.variable_types['numerical']])
+        
+        # Apply obligatory ordinal encoding to categorical variables (requried for matrix multiplication)
+        ordinal_encoder = OrdinalEncoder(cols=self.variable_types['categorical'], return_df=True)
+
+        # Fit ordinal encoder on training set
+        ordinal_encoder.fit(self.X_text.loc[training_index], self.y.loc[training_index])
+
+        # Encode values specified in cols argument
+        self.X_text = ordinal_encoder.transform(self.X_text)
+        
+        # Encode categorical variables further using specified encoder
+        if self.categorical_encoder is not None:
+            # Fit encoder on training set
+            self.categorical_encoder.fit(self.X_text.loc[training_index, self.variable_types['categorical']].astype('object'), self.y.loc[training_index])
+
+            # Encode values of training set: as per category_econders docs, y should be provided when transforming input vector of training set
+            X_text_enc = self.categorical_encoder.transform(self.X_text.loc[training_index, self.variable_types['categorical']].astype('object'), self.y.loc[training_index])
+
+            # Convert encoded training values into data frame
+            X_text_enc = pd.DataFrame(X_text_enc, index=training_index)
+
+            # This becomes superflous when subset index is None, since in that case training_index = self.data.index 
+            if subset_index is not None:
+                # y should not be provided when transforming input vector of non-training set
+                X_text_enc_non_train = self.categorical_encoder.transform(self.X_text.loc[non_training_index, self.variable_types['categorical']].astype('object'))
+
+                # Convert encoded non-training values into data frame
+                X_text_enc_non_train = pd.DataFrame(X_text_enc_non_train, index=non_training_index)
+
+                # Concatenate encoded training and non training rows
+                X_text_enc = pd.concat([X_text_enc, X_text_enc_non_train])
+            
+            # Remove encoded columns from original input vector
+            self.X_text = self.X_text.drop(columns=self.variable_types['categorical'])
+            
+            # Concatenate original input vector and encoded columns
+            self.X_text = self.X_text.join(X_text_enc)
 
         # Apply input scaler
         if self.input_scaler is not None:
