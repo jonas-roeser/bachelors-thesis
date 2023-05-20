@@ -570,7 +570,7 @@ def train_model(model, dataset_train, dataset_val, loss_function, optimizer, dev
         batch_losses_train = []
 
         # Iterate over all training batches
-        for i, sample in enumerate(dataloader_train):
+        for i, sample in enumerate(tqdm(dataloader_train)):
             # Pass batch to GPU
             X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
 
