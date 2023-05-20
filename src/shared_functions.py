@@ -488,37 +488,6 @@ def data_overview(df):
     # Return data overview
     return data_overview
 
-class MultiEpochsDataLoader(torch.utils.data.DataLoader):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._DataLoader__initialized = False
-        self.batch_sampler = _RepeatSampler(self.batch_sampler)
-        self._DataLoader__initialized = True
-        self.iterator = super().__iter__()
-
-    def __len__(self):
-        return len(self.batch_sampler.sampler)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield next(self.iterator)
-
-
-class _RepeatSampler(object):
-    """ Sampler that repeats forever.
-
-    Args:
-        sampler (Sampler)
-    """
-
-    def __init__(self, sampler):
-        self.sampler = sampler
-
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)
-
 
 def train_model(model, dataset_train, dataset_val, loss_function, optimizer, device='cpu', epochs=10, scheduler=None, patience=3, delta=0, batch_size=1, shuffle=False, num_workers=0, pin_memory=False, save_state_dict_as='state_dict.pt', save_history_as=None):
     '''
