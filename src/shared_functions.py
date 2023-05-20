@@ -1245,7 +1245,7 @@ def plot_history(history, save_as=None):
 
     # Set labels
     ax.set_xlabel('Epoch')
-    ax.set_ylabel('RMSE')
+    ax.set_ylabel('RMSE (\$)')
 
     # Show legend
     ax.legend(frameon=False)
@@ -1330,8 +1330,8 @@ def plot_pred_vs_actual(predictions, save_as=None):
     ax.plot([0, 1], [0, 1], transform=ax.transAxes, linestyle='dashed', color='black')
 
     # Set labels
-    ax.set_xlabel('$y_{true}$')
-    ax.set_ylabel('$y_{pred}$')
+    ax.set_xlabel('$y_{true}$ (\$)')
+    ax.set_ylabel('$y_{pred}$ (\$)')
 
     # Set ticks
     ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
