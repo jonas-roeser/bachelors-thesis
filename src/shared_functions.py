@@ -471,6 +471,9 @@ def data_overview(df):
     # Create data overview
     data_overview = pd.DataFrame({'column': df.columns.values})
 
+    # Set index name
+    data_overview.index.name = 'n'
+    
     # Get values for each column
     for i, column in enumerate(df):
         # Get data type
@@ -481,7 +484,7 @@ def data_overview(df):
 
         # Get number of NA values
         data_overview.loc[i, 'n_missing'] = df[column].isna().sum()
-
+    
     # Use most recent pandas data types (e.g. pd.NA)
     data_overview = data_overview.convert_dtypes()
 

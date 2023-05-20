@@ -1,4 +1,4 @@
-,column,dtype,n_unique,n_missing,variable_type
+n,column,dtype,n_unique,n_missing,variable_type
 0,borough,Int64,5,0,categorical
 1,neighborhood,string,251,0,categorical
 2,building_class_category,string,43,0,categorical
