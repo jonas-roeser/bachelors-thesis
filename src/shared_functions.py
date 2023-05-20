@@ -7,12 +7,13 @@ from urlsigner import sign_url
 from pathlib import Path
 from PIL import Image
 import os
+from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from pytorchtools import EarlyStopping
+from pytorch_utils import EarlyStopping, MultiEpochsDataLoader
 from sklearn import metrics as sklearn_metrics
 
 def subset_index(index, test_size=.2, val_size=0, k_folds=None, shuffle=True, random_state=42, return_keys=True, save_index_as=None, save_keys_as=None, save_sizes_as=None, verbose=True):
@@ -462,7 +463,39 @@ def data_overview(df):
     # Return data overview
     return data_overview
 
-def train_model(model, epochs, dataloader_train, dataloader_val, loss_function, optimizer, device='cpu', patience=3, delta=0, save_state_dict_as='state_dict.pt', save_history_as=None):
+class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._DataLoader__initialized = False
+        self.batch_sampler = _RepeatSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+
+class _RepeatSampler(object):
+    """ Sampler that repeats forever.
+
+    Args:
+        sampler (Sampler)
+    """
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)
+
+
+def train_model(model, dataset_train, dataset_val, loss_function, optimizer, device='cpu', epochs=10, patience=3, delta=0, batch_size=1, shuffle=False, num_workers=0, pin_memory=False, save_state_dict_as='state_dict.pt', save_history_as=None):
     '''
     Train machine learning model.
     
@@ -470,18 +503,26 @@ def train_model(model, epochs, dataloader_train, dataloader_val, loss_function, 
     ----------
     model : model
         Model to train.
-    epochs : int
-        Number of epochs to train for.
-    dataloader_train : DataLoader
-        Data loader for training data.
-    dataloader_val : DataLoader
-        Data loader for validation data.
+    dataset_train : MultiModalDataset
+        Training dataset.
+    dataloader_val : MultiModalDataset
+        Validation dataset.
     device : str, default 'cpu'
         Device to use for computation.
+    epochs : int, default 10
+        Number of epochs to train for.
     patience : int, default 3
         Number of epochs without improvement before stopping early.
     delta : int, default 0
-        Minimum lodd improvement. 
+        Minimum lodd improvement.
+    batch_size : int, default 1
+        Batch size for data loaders.
+    shuffle : bool, default False
+        Whether to shuffle samples within batch.
+    num_workers : int, default 0
+        Number of workers to create for data loader.
+    pin_memory : bool, default False
+        Whether to copy tensors to device pinned memory.
     save_sate_dict_as : str, default 'state_dict.pt'
         Where to save state dict in pt format.
     save_history_as : str, default None
@@ -494,6 +535,22 @@ def train_model(model, epochs, dataloader_train, dataloader_val, loss_function, 
     history : DataFrame
         Training history.
     '''
+    # Create dataloaders
+    dataloader_train = MultiEpochsDataLoader(
+        dataset_train,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+        )
+    dataloader_val = MultiEpochsDataLoader(
+        dataset_val,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+        )
+    
     # Create data frame for storing training history
     history = pd.DataFrame(index=pd.Index(np.arange(epochs) + 1, name='epoch'))
 
