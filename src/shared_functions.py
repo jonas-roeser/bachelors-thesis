@@ -520,7 +520,7 @@ class _RepeatSampler(object):
             yield from iter(self.sampler)
 
 
-def train_model(model, dataset_train, dataset_val, loss_function, optimizer, device='cpu', epochs=10, patience=3, delta=0, batch_size=1, shuffle=False, num_workers=0, pin_memory=False, save_state_dict_as='state_dict.pt', save_history_as=None):
+def train_model(model, dataset_train, dataset_val, loss_function, optimizer, device='cpu', epochs=10, scheduler=None, patience=3, delta=0, batch_size=1, shuffle=False, num_workers=0, pin_memory=False, save_state_dict_as='state_dict.pt', save_history_as=None):
     '''
     Train machine learning model.
     
@@ -532,10 +532,16 @@ def train_model(model, dataset_train, dataset_val, loss_function, optimizer, dev
         Training dataset.
     dataloader_val : MultiModalDataset
         Validation dataset.
+    loss_function : callable
+        Function for computing loss.
+    optimizer : callable
+        Optimization algorithm for optimizing weights.
     device : str, default 'cpu'
         Device to use for computation.
     epochs : int, default 10
         Number of epochs to train for.
+    scheduler : callable
+        Learning rate scheduler to call after each epoch.
     patience : int, default 3
         Number of epochs without improvement before stopping early.
     delta : int, default 0
@@ -616,6 +622,10 @@ def train_model(model, dataset_train, dataset_val, loss_function, optimizer, dev
 
             # Store batch loss
             batch_losses_train.append(batch_loss_train.data.item())
+        
+        # Adjust learning rate
+        if scheduler is not None:
+            scheduler.step()
         
         # Calculate training loss
         epoch_rmse_train = np.mean(batch_losses_train)**.5
