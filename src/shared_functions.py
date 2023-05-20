@@ -980,21 +980,21 @@ def get_image_boundaries(location_lat, location_long, width_px, height_px, zoom_
     return lat_top, lat_bottom, long_left, long_right
 
 
-def plot_history(history, save_as=None):
+def plot_histogram(values, save_as=None):
     '''
-    Plot a model's training history.
+    Plot simple histogram.
     
     Parameters
     ----------
-    predictions : DataFrame
-        Training history of a model.
+    values : list, array
+        List of values to plot histogram for.
     save_as : str, default None
-        Where to save training history in pdf format.
+        Where to save the plot in pdf format.
     
     Returns
     -------
     None
-        Plots training history.
+        Plots histogram for given values.
     '''
     # Change font to LaTeX
     plt.rcParams.update({
@@ -1013,32 +1013,25 @@ def plot_history(history, save_as=None):
         'xtick.labelsize': 10.0, # 'medium' (10.0)
         'ytick.labelsize': 10.0 # 'medium' (10.0)
         })
-    
+
     # Initialise figure
     textwidth = 6.3 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
     fig, ax = plt.subplots(figsize=(textwidth, 4))
 
-    # Plot data
-    ax.plot(history.index, history.rmse_train, linestyle='dashed', color='black', label='$RMSE_{train}$')
-    ax.plot(history.index, history.rmse_val, color='#c1272d', label='$RMSE_{val}$')
+    # Plot histogram
+    ax.hist(values, bins = 30, color = '#006795', edgecolor = 'white')
 
     # Set labels
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('RMSE')
-
-    # Show legend
-    ax.legend(frameon=False)
+    ax.set_xlabel('Sale Price (\$)')
+    ax.set_ylabel('Transactions')
 
     # Set ticks
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
 
     # Set axis limits
-    x_min = min(history.index)
-    x_max = max(history.index)
-    y_min = min(min(history.rmse_train), min(history.rmse_val))
-    y_max = max(max(history.rmse_train), max(history.rmse_val))
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min - 0.1 * (y_max - y_min), y_max + 0.1 * (y_max - y_min))
+    ax.set_xlim(0)
+    ax.set_ylim(0)
 
     # Remove figure padding
     plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
