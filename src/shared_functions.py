@@ -1118,6 +1118,81 @@ def plot_histogram(values, save_as=None):
     plt.close()
 
 
+def plot_log_histogram(values, save_as=None):
+    '''
+    Plot histogram with log scaling.
+    
+    Parameters
+    ----------
+    values : list, array
+        List of values to plot histogram for.
+    save_as : str, default None
+        Where to save the plot in pdf format.
+    
+    Returns
+    -------
+    None
+        Plots histogram with log scaling for given values.
+    '''
+    # Change font to LaTeX
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': [],
+
+        # Fine-tune font-size
+        'font.size': 12.0, # 10.0
+        'figure.titlesize': 14.4, # 'large' (12.0)
+        'figure.labelsize': 12.0, # 'large' (12.0)
+        'axes.titlesize': 12.0, # 'large' (12.0)
+        'axes.labelsize': 10.95, # 'medium' (10.0)
+        'legend.title_fontsize': 10.95, # None (10.0)
+        'legend.fontsize': 10.0, # 'medium' (10.0)
+        'xtick.labelsize': 10.0, # 'medium' (10.0)
+        'ytick.labelsize': 10.0 # 'medium' (10.0)
+        })
+
+    # Initialise figure
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
+
+    # Plot histogram
+    ax.hist(values, bins = 30, color = '#006795', edgecolor = 'white')
+
+    # Set labels
+    ax.set_xlabel('Sale Price (\$)')
+    ax.set_ylabel('Transactions')
+
+    # Set axis scale
+    ax.set_yscale('log')
+
+    # Set ticks
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x * 1e-6:,.0f}M'))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+
+    # Set axis limits
+    ax.set_xlim(0)
+    ax.set_ylim(1)
+
+    # Remove figure padding
+    plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
+    left = max(fig.subplotpars.left, 1 - fig.subplotpars.right)
+    spine_top_rel_height = ax.spines['top'].get_linewidth() / 72 / fig.get_size_inches()[1]
+    fig.subplots_adjust( # does not work in .ipynb
+        left=left,
+        right=1 - left,
+        top=1 - .5 * spine_top_rel_height if ax.get_title() == '' else fig.subplotpars.top)
+
+    # Save figure
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_as, dpi=300) # set dpi for any rasterized parts of figure
+    
+    # Show plot
+    plt.show()
+    plt.close()
+
+
 def plot_satellite_image(index, location_lat, location_long, zoom_level, save_as=None):
     '''
     Plot model predictions vs actuals as a heatmap.
