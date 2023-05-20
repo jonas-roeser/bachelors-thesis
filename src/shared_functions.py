@@ -1087,7 +1087,9 @@ def plot_histogram(values, save_as=None):
     ax.set_ylabel('Transactions')
 
     # Set ticks
-    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x * 1e-6:,.0f}M'))
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
 
     # Set axis limits
@@ -1249,7 +1251,9 @@ def plot_history(history, save_as=None):
     ax.legend(frameon=False)
 
     # Set ticks
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x * 1e-3:,.0f}k'))
 
     # Set axis limits
     x_min = min(history.index)
@@ -1330,10 +1334,10 @@ def plot_pred_vs_actual(predictions, save_as=None):
     ax.set_ylabel('$y_{pred}$')
 
     # Set ticks
-    ax.set_xticks(range(0, 10*10**6, 2*10**6))
-    ax.set_yticks(range(0, 10*10**6, 2*10**6))
-    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
-    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:,.0f}'))
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(prune='upper'))
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x * 1e-6:,.0f}M'))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x * 1e-6:,.0f}M'))
 
     # Set axis limits
     ax.set_xlim(0, 10000000)
