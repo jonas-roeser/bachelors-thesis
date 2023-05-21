@@ -6,6 +6,7 @@ import requests
 from urlsigner import sign_url
 from pathlib import Path
 from PIL import Image
+import geopandas as gpd
 import os
 from tqdm import tqdm
 import matplotlib
@@ -685,7 +686,7 @@ def get_predictions(model, dataset, subset_index, device='cpu', save_as=None):
     y_pred = []
 
     # Iterate over all batches
-    for i, sample in enumerate(DataLoader(dataset)):
+    for i, sample in enumerate(tqdm(DataLoader(dataset))):
         with torch.no_grad():
             # Pass batch to GPU
             X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
@@ -1259,6 +1260,109 @@ def plot_satellite_image(index, location_lat, location_long, zoom_level, save_as
     # Set ticks
     ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.3f}°'))
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.3f}°'))
+
+    # Remove figure padding
+    plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
+    left = max(fig.subplotpars.left, 1 - fig.subplotpars.right)
+    spine_top_rel_height = ax.spines['top'].get_linewidth() / 72 / fig.get_size_inches()[1]
+    fig.subplots_adjust( # does not work in .ipynb
+        left=left,
+        right=1 - left,
+        top=1 - .5 * spine_top_rel_height if ax.get_title() == '' else fig.subplotpars.top)
+
+    # Save figure
+    if save_as is not None:
+        Path(os.path.dirname(save_as)).mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_as, dpi=300) # set dpi for any rasterized parts of figure
+    
+    # Show plot
+    plt.show()
+    plt.close()
+
+
+def plot_geo_heatmap(dataset, save_as=None):
+    '''
+    Plot model predictions vs actuals as a heatmap.
+    
+    Parameters
+    ----------
+    dataset : DataFrame
+        Dataset including sale price and coordinates.
+    save_as : str, default None
+        Where to save the plot in pdf format.
+    
+    Returns
+    -------
+    None
+        Plots geographic heatmap.
+    '''
+    # Change font to LaTeX
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': [],
+
+        # Fine-tune font-size
+        'font.size': 12.0, # 10.0
+        'figure.titlesize': 14.4, # 'large' (12.0)
+        'figure.labelsize': 12.0, # 'large' (12.0)
+        'axes.titlesize': 12.0, # 'large' (12.0)
+        'axes.labelsize': 10.95, # 'medium' (10.0)
+        'legend.title_fontsize': 10.95, # None (10.0)
+        'legend.fontsize': 10.0, # 'medium' (10.0)
+        'xtick.labelsize': 10.0, # 'medium' (10.0)
+        'ytick.labelsize': 10.0 # 'medium' (10.0)
+        })
+    
+    # Select relevant columns
+    df = dataset[['sale_price', 'location_lat', 'location_long']].copy()
+
+    # Drop NA values
+    df.dropna(inplace=True)
+
+    # Convert df into GeoDataFrame
+    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.location_long, df.location_lat), crs="EPSG:4326")
+
+    # Load map of NY borough boundaries
+    nybb = gpd.read_file('../data/raw/nybb_23b/nybb.shp').to_crs('EPSG:4326')
+
+    # Load map of NY community districs
+    nycd = gpd.read_file('../data/raw/nycd_23b/nycd.shp').to_crs('EPSG:4326')
+
+    # Join transcations with community districs
+    gdf = gpd.sjoin(gdf, nycd, how="inner", predicate='within')
+
+    # Compute average sales price per cummunity district
+    avg_prices = gdf.groupby('index_right').sale_price.mean()
+
+    # Map average sales prices to community distric polygons
+    gdf_avg = gpd.GeoDataFrame(nycd)
+    gdf_avg['avg_price'] = nycd.index.map(avg_prices.to_dict())
+
+    # Fill NA values for community districts without transactions
+    gdf_avg['avg_price'] = gdf_avg['avg_price'].fillna(0)
+    
+    # Initialise figure
+    textwidth = 6.3 * .8 # a4_width - 2 * margin = 8.3in - 2 * 2in = 6.3in
+    fig, ax = plt.subplots(figsize=(textwidth, 4 * .8))
+
+    # Plot data
+    hm = gdf_avg.plot(column='avg_price', cmap='viridis', linewidth=0, norm=matplotlib.colors.LogNorm(), ax=ax)
+
+    # Plot borough boundaries
+    nybb.plot(ax=ax, color='none', linewidth=1, edgecolor='white')
+
+    # Add colorbar
+    cbar = plt.colorbar(hm.collections[0])
+    cbar.set_label('Average Sale Price (\$)')
+
+    # # Set labels
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+
+    # # Set ticks
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.2f}°'))
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, pos: f'{x:.2f}°'))
 
     # Remove figure padding
     plt.tight_layout(pad=0.1) # pad=0 can lead to text being cut off
