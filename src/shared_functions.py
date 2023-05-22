@@ -739,6 +739,9 @@ def train_image_model(model, dataset_train, dataset_val, loss_function, optimize
         for i, sample in enumerate(tqdm(dataloader_train)):
             # Pass batch to GPU
             X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
+            
+            # Convert datatype of y to fit CEL
+            y = y.squeeze().long()
 
             # Reset gradients
             model.zero_grad()
@@ -778,7 +781,10 @@ def train_image_model(model, dataset_train, dataset_val, loss_function, optimize
         for i, sample in enumerate(dataloader_val):
             with torch.no_grad():
                 # Pass batch to GPU
-                X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
+                X, y = [X.to(device) for X in sample[:-1]], sample[-1].squeeze().to(device)
+                
+                # Convert datatype of y to fit CEL
+                y = y.squeeze().long()
 
                 # Run forward pass
                 output_val = model(*X)
@@ -790,13 +796,13 @@ def train_image_model(model, dataset_train, dataset_val, loss_function, optimize
                 batch_losses_val.append(batch_loss_val.data.item())
 
         # Calculate validation loss
-        epoch_cel_val = np.mean(epoch_cel_val)
+        epoch_cel_val = np.mean(batch_losses_val)
 
         # Store validation loss in history
         history.loc[epoch, 'CEL_val'] = epoch_cel_val.item()
         
         # Print progress to console
-        print(f'Epoch {epoch:{len(str(epochs))}.0f}/{epochs}: CEL_train: {epoch_cel_train.item():,.0f}, CEL_val: {epoch_cel_val.item():,.0f}')
+        print(f'Epoch {epoch:{len(str(epochs))}.0f}/{epochs}: CEL_train: {epoch_cel_train.item():,.5f}, CEL_val: {epoch_cel_val.item():,.5f}')
 
         # Stop early in case validation loss does not improve
         stop_early(epoch_cel_val, model)
