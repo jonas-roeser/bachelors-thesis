@@ -353,14 +353,15 @@ class MultiModalDataset(Dataset):
             # Impute values in entire set
             self.X_text[self.variable_types['numerical']] = self.numerical_imputer.transform(self.X_text[self.variable_types['numerical']])
         
-        # Apply obligatory ordinal encoding to categorical variables (requried for matrix multiplication)
-        ordinal_encoder = OrdinalEncoder(cols=self.variable_types['categorical'], return_df=True)
+        if data_overview is not None:
+            # Apply obligatory ordinal encoding to categorical variables (requried for matrix multiplication)
+            ordinal_encoder = OrdinalEncoder(cols=self.variable_types['categorical'], return_df=True)
 
-        # Fit ordinal encoder on training set
-        ordinal_encoder.fit(self.X_text.loc[training_index], self.y.loc[training_index])
+            # Fit ordinal encoder on training set
+            ordinal_encoder.fit(self.X_text.loc[training_index], self.y.loc[training_index])
 
-        # Encode values specified in cols argument
-        self.X_text = ordinal_encoder.transform(self.X_text)
+            # Encode values specified in cols argument
+            self.X_text = ordinal_encoder.transform(self.X_text)
         
         # Encode categorical variables further using specified encoder
         if self.categorical_encoder is not None:
@@ -638,6 +639,167 @@ def train_model(model, dataset_train, dataset_val, loss_function, optimizer, dev
 
         # Stop early in case validation loss does not improve
         stop_early(epoch_rmse_val, model)
+        if stop_early.early_stop:
+            print("Early stopping condition met")
+            break
+            
+    # Load the best model
+    model.load_state_dict(torch.load(stop_early.path))
+
+    # Save predictions
+    if save_history_as is not None:
+        Path(os.path.dirname(save_history_as)).mkdir(parents=True, exist_ok=True)
+        history.to_csv(save_history_as)
+
+    # Return model and training history
+    return model, history
+
+
+def train_image_model(model, dataset_train, dataset_val, loss_function, optimizer, device='cpu', epochs=10, scheduler=None, patience=3, delta=0, batch_size=1, shuffle=False, num_workers=0, pin_memory=False, save_state_dict_as='state_dict.pt', save_history_as=None):
+    '''
+    Train image classification model.
+    
+    Parameters
+    ----------
+    model : model
+        Model to train.
+    dataset_train : MultiModalDataset
+        Training dataset.
+    dataloader_val : MultiModalDataset
+        Validation dataset.
+    loss_function : callable
+        Function for computing loss.
+    optimizer : callable
+        Optimization algorithm for optimizing weights.
+    device : str, default 'cpu'
+        Device to use for computation.
+    epochs : int, default 10
+        Number of epochs to train for.
+    scheduler : callable
+        Learning rate scheduler to call after each epoch.
+    patience : int, default 3
+        Number of epochs without improvement before stopping early.
+    delta : int, default 0
+        Minimum lodd improvement.
+    batch_size : int, default 1
+        Batch size for data loaders.
+    shuffle : bool, default False
+        Whether to shuffle samples within batch.
+    num_workers : int, default 0
+        Number of workers to create for data loader.
+    pin_memory : bool, default False
+        Whether to copy tensors to device pinned memory.
+    save_sate_dict_as : str, default 'state_dict.pt'
+        Where to save state dict in pt format.
+    save_history_as : str, default None
+        Where to save training history in csv format.
+    
+    Returns
+    -------
+    model : model
+        Trained model predictions.
+    history : DataFrame
+        Training history.
+    '''
+    # Create dataloaders
+    dataloader_train = MultiEpochsDataLoader(
+        dataset_train,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+        )
+    dataloader_val = MultiEpochsDataLoader(
+        dataset_val,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+        )
+    
+    # Create data frame for storing training history
+    history = pd.DataFrame(index=pd.Index(np.arange(epochs) + 1, name='epoch'))
+
+    # Create directory for saving state dict
+    if save_state_dict_as is not None:
+        Path(os.path.dirname(save_state_dict_as)).mkdir(parents=True, exist_ok=True)
+
+    # Define early stopping condition
+    stop_early = EarlyStopping(patience=patience, delta=delta, path=save_state_dict_as)
+
+    # Training loop
+    for epoch in np.arange(epochs) + 1:
+        # Activate training mode
+        model.train()
+
+        # Create list for storing batch losses
+        batch_losses_train = []
+
+        # Iterate over all training batches
+        for i, sample in enumerate(tqdm(dataloader_train)):
+            # Pass batch to GPU
+            X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
+
+            # Reset gradients
+            model.zero_grad()
+
+            # Run forward pass
+            output_train = model(*X)
+
+            # Compute batch loss
+            batch_loss_train = loss_function(output_train, y)
+
+            # Run backward pass
+            batch_loss_train.backward()
+
+            # Optimise parameters
+            optimizer.step()
+
+            # Store batch loss
+            batch_losses_train.append(batch_loss_train.data.item())
+        
+        # Adjust learning rate
+        if scheduler is not None:
+            scheduler.step()
+        
+        # Calculate training loss
+        epoch_cel_train = np.mean(batch_losses_train)
+
+        # Store training loss in history
+        history.loc[epoch, 'CEL_train'] = epoch_cel_train.item()
+
+        # Activate validation mode
+        model.eval() # deactivates potential Dropout and BatchNorm
+        
+        # Create list for storing batch losses
+        batch_losses_val = []
+
+        # Iterate over all validation batches
+        for i, sample in enumerate(dataloader_val):
+            with torch.no_grad():
+                # Pass batch to GPU
+                X, y = [X.to(device) for X in sample[:-1]], sample[-1].to(device)
+
+                # Run forward pass
+                output_val = model(*X)
+
+                # Compute batch loss
+                batch_loss_val = loss_function(output_val, y)
+
+                # Store batch loss
+                batch_losses_val.append(batch_loss_val.data.item())
+
+        # Calculate validation loss
+        epoch_cel_val = np.mean(epoch_cel_val)
+
+        # Store validation loss in history
+        history.loc[epoch, 'CEL_val'] = epoch_cel_val.item()
+        
+        # Print progress to console
+        print(f'Epoch {epoch:{len(str(epochs))}.0f}/{epochs}: CEL_train: {epoch_cel_train.item():,.0f}, CEL_val: {epoch_cel_val.item():,.0f}')
+
+        # Stop early in case validation loss does not improve
+        stop_early(epoch_cel_val, model)
         if stop_early.early_stop:
             print("Early stopping condition met")
             break

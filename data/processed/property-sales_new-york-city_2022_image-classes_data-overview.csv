@@ -1,0 +1,3 @@
+n,column,dtype,n_unique,n_missing,variable_type
+0,sale_price,Int64,4198,0,numerical
+1,price_class,Int64,2,0,categorical
